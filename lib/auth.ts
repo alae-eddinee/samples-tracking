@@ -13,14 +13,43 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        if (!credentials?.email || !credentials?.password) {
+          console.error("[auth] Missing credentials");
+          return null;
+        }
 
-        await connectDB();
-        const user = await User.findOne({ email: credentials.email.toLowerCase(), active: true });
-        if (!user) return null;
+        try {
+          await connectDB();
+        } catch (err) {
+          console.error("[auth] DB connection failed:", err);
+          return null;
+        }
 
-        const valid = await bcrypt.compare(credentials.password, user.password as string);
-        if (!valid) return null;
+        let user;
+        try {
+          user = await User.findOne({ email: credentials.email.toLowerCase(), active: true });
+        } catch (err) {
+          console.error("[auth] User query failed:", err);
+          return null;
+        }
+
+        if (!user) {
+          console.error("[auth] No active user found for:", credentials.email.toLowerCase());
+          return null;
+        }
+
+        let valid = false;
+        try {
+          valid = await bcrypt.compare(credentials.password, user.password as string);
+        } catch (err) {
+          console.error("[auth] bcrypt.compare failed:", err);
+          return null;
+        }
+
+        if (!valid) {
+          console.error("[auth] Password mismatch for:", credentials.email.toLowerCase());
+          return null;
+        }
 
         return {
           id: (user._id as { toString(): string }).toString(),
